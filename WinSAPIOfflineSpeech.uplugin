@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "WinSAPIOfflineSpeech",
+	"Description": "WinSAPI Offline Speech is a Windows-only Unreal Engine plugin that delivers offline Text-to-Speech and Speech-to-Text using Microsoft SAPI, enabling real-time voice features with zero internet dependency.",
+	"Category": "Other",
+	"CreatedBy": "Krishna",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "WinSAPIOfflineSpeech",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}
