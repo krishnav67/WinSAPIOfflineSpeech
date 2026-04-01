@@ -4,7 +4,6 @@
 #include "WakeWordDetector.h"
 
 #include <sapi.h>
-//#include <sphelper.h>
 
 #ifndef SAFE_RELEASE
 #define SAFE_RELEASE(x) \
@@ -44,7 +43,7 @@ void UWakeWordDetector::TickComponent(float DeltaTime, ELevelTick TickType,
 	// ...
 }
 
-void UWakeWordDetector::StartWakeWordListening(const FString& WakeWord)
+void UWakeWordDetector::PrepWakeWordListening(const FString& WakeWord)
 {
     bStopListening = false;
 
@@ -65,6 +64,102 @@ void UWakeWordDetector::StartWakeWordListening(const FString& WakeWord)
         Cleanup();
         ::CoUninitialize();
     });
+}
+
+void UWakeWordDetector::PrepWakeWordsListening(const TArray<FString>& WakeWords)
+{
+	bStopListening = false;
+
+	Async(EAsyncExecution::Thread, [this, WakeWords]()
+	{
+		if (!InitializeCOM()) return;
+
+		// Convert all wake words to lowercase once
+		TArray<FString> LowerWakeWords;
+		for (const FString& Word : WakeWords)
+		{
+			LowerWakeWords.Add(Word.ToLower());
+		}
+
+		if (!CreateRecognizer()) goto cleanup;
+		if (!SetupAudioInput()) goto cleanup;
+		if (!CreateRecognitionContext()) goto cleanup;
+		if (!SetupGrammar()) goto cleanup;
+
+		RunListeningLoop_Multi(LowerWakeWords);
+
+	cleanup:
+		Cleanup();
+		::CoUninitialize();
+	});
+}
+
+void UWakeWordDetector::RunListeningLoop_Multi(const TArray<FString>& LowerWakeWords)
+{
+	UE_LOG(LogTemp, Warning, TEXT("🎤 Listening Started (Multi Wake Words)"));
+
+	while (!bStopListening)
+	{
+		DWORD waitResult = WaitForSingleObject(hEvent, 500);
+
+		if (waitResult == WAIT_OBJECT_0)
+		{
+			SPEVENT event;
+			ULONG fetched = 0;
+
+			while (SUCCEEDED(pContext->GetEvents(1, &event, &fetched)) && fetched > 0)
+			{
+				if (event.eEventId == SPEI_RECOGNITION)
+				{
+					HandleRecognitionEvent_Multi(event, LowerWakeWords);
+				}
+			}
+		}
+		else if (waitResult == WAIT_FAILED)
+		{
+			UE_LOG(LogTemp, Error, TEXT("❌ Wait failed"));
+			break;
+		}
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("🛑 Listening Stopped"));
+}
+
+void UWakeWordDetector::HandleRecognitionEvent_Multi(const SPEVENT& Event, const TArray<FString>& LowerWakeWords)
+{
+	ISpRecoResult* pResult = (ISpRecoResult*)Event.lParam;
+	if (!pResult) return;
+
+	LPWSTR pText = nullptr;
+
+	if (SUCCEEDED(pResult->GetText(
+		SP_GETWHOLEPHRASE,
+		SP_GETWHOLEPHRASE,
+		FALSE,
+		&pText,
+		nullptr)))
+	{
+		FString text = FString(pText);
+		::CoTaskMemFree(pText);
+
+		FString lower = text.ToLower();
+
+		UE_LOG(LogTemp, Warning, TEXT("🎤 %s"), *text);
+
+		// 🔥 Check against all wake words
+		for (const FString& WakeWord : LowerWakeWords)
+		{
+			if (lower.Contains(WakeWord))
+			{
+				Async(EAsyncExecution::TaskGraphMainThread, [this, text]()
+				{
+					OnWakeWordDetected.Broadcast(text);
+				});
+
+				break; // stop after first match
+			}
+		}
+	}
 }
 
 bool UWakeWordDetector::InitializeCOM()
@@ -162,7 +257,7 @@ void UWakeWordDetector::RunListeningLoop(const FString& LowerWakeWord)
 
 	while (!bStopListening)
 	{
-		DWORD waitResult = WaitForSingleObject(hEvent, 500);
+		DWORD waitResult = WaitForSingleObject(hEvent, WaitListening);
 
 		if (waitResult == WAIT_OBJECT_0)
 		{
@@ -228,9 +323,14 @@ void UWakeWordDetector::Cleanup()
 	SAFE_RELEASE(pCategory);
 }
 
-void UWakeWordDetector::StartListening(bool bListen)
+void UWakeWordDetector::StartListening()
 {
-    bStopListening = !bListen;
+    bStopListening = false;
+}
+
+void UWakeWordDetector::StopListening()
+{
+	bStopListening = true;
 }
 
 TArray<FString> UWakeWordDetector::GetInstalledLanguages()

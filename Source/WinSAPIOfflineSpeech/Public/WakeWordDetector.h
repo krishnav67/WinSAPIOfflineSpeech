@@ -26,15 +26,24 @@ protected:
 public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-
+	
 	UPROPERTY(BlueprintAssignable)
 	FOnWakeWordDetected OnWakeWordDetected;
-
-	UFUNCTION(BlueprintCallable, Category = "WinSAPIOfflineWakeWord")
-	void StartWakeWordListening(const FString& WakeWord);
+	
+	UPROPERTY(EditAnywhere, Category = "WinSAPIOfflineWakeWord", meta = (ForceUnits = "ms", ClampMin = "100"))
+	float WaitListening = 500.0f;
 	
 	UFUNCTION(BlueprintCallable, Category = "WinSAPIOfflineWakeWord")
-	void StartListening(bool bListen = true);
+	void PrepWakeWordListening(const FString& WakeWord);
+
+	UFUNCTION(BlueprintCallable, Category = "WinSAPIOfflineWakeWord")
+	void PrepWakeWordsListening(const TArray<FString>& WakeWords);
+	
+	UFUNCTION(BlueprintCallable, Category = "WinSAPIOfflineWakeWord")
+	void StartListening();
+
+	UFUNCTION(BlueprintCallable, Category = "WinSAPIOfflineWakeWord")
+	void StopListening();
 
 	UFUNCTION(BlueprintCallable, Category = "WinSAPIOfflineWakeWord")
 	TArray<FString> GetInstalledLanguages();
@@ -45,7 +54,9 @@ private:
 	bool CreateRecognitionContext();
 	bool SetupGrammar();
 	void RunListeningLoop(const FString& LowerWakeWord);
+	void RunListeningLoop_Multi(const TArray<FString>& LowerWakeWords);
 	void HandleRecognitionEvent(const SPEVENT& Event, const FString& LowerWakeWord);
+	void HandleRecognitionEvent_Multi(const SPEVENT& Event, const TArray<FString>& LowerWakeWords);
 	void Cleanup();
 
 	// 🔹 SAPI Core
